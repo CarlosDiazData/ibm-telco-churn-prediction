@@ -23,6 +23,9 @@ htmlcov/
 .vscode/
 .idea/
 
+# Agent & ML ops artifacts
+.agents/
+
 # OS
 .DS_Store
 Thumbs.db
