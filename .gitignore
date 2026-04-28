@@ -25,6 +25,7 @@ htmlcov/
 
 # Agent & ML ops artifacts
 .agents/
+.atl/
 
 # OS
 .DS_Store

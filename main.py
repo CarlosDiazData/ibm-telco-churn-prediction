@@ -92,21 +92,29 @@ def main():
     )
     print(f"\nTrain size: {len(X_train)}, Test size: {len(X_test)}")
 
+    # ── 4b. Compute CLTV sample weights ───────────────────────────────────────
+    # Extract CLTV weights aligned with X_train to prevent leakage
+    weights_train = df.loc[X_train.index, "CLTV"] / df["CLTV"].mean()
+    print(f"CLTV weight stats — min: {weights_train.min():.3f}, max: {weights_train.max():.3f}, mean: {weights_train.mean():.3f}")
+
     # ── 5. Train and log to MLflow ─────────────────────────────────────────────
     print("\nTraining models (with MLflow tracking)...")
-    run_ids = train_and_log(X_train, y_train, preprocessor)
+    run_ids = train_and_log(X_train, y_train, preprocessor, sample_weight=weights_train.values)
     print(f"MLflow run IDs: {run_ids}")
 
     # ── 6. Evaluate ────────────────────────────────────────────────────────────
     # Re-train full pipeline to get the fitted preprocessor + classifier
     from sklearn.pipeline import Pipeline as SkPipeline
-    from sklearn.ensemble import RandomForestClassifier
+    from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
     from sklearn.linear_model import LogisticRegression
+    from sklearn.svm import SVC
 
     results = {}
     for model_name, model in [
         ("LogisticRegression", LogisticRegression(max_iter=1000, class_weight="balanced", random_state=42)),
         ("RandomForest", RandomForestClassifier(n_estimators=100, class_weight="balanced", random_state=42)),
+        ("GradientBoosting", GradientBoostingClassifier(n_estimators=100, random_state=42)),
+        ("SVM", SVC(kernel="rbf", probability=True, class_weight="balanced", random_state=42)),
     ]:
         pipeline = SkPipeline(
             steps=[
@@ -125,10 +133,13 @@ def main():
     print(f"\nBest model: {best_model_name} (ROC-AUC: {best_metrics['roc_auc']})")
 
     # Re-fit best model for serialization
-    if best_model_name == "RandomForest":
-        best_clf = RandomForestClassifier(n_estimators=100, class_weight="balanced", random_state=42)
-    else:
-        best_clf = LogisticRegression(max_iter=1000, class_weight="balanced", random_state=42)
+    model_registry = {
+        "LogisticRegression": LogisticRegression(max_iter=1000, class_weight="balanced", random_state=42),
+        "RandomForest": RandomForestClassifier(n_estimators=100, class_weight="balanced", random_state=42),
+        "GradientBoosting": GradientBoostingClassifier(n_estimators=100, random_state=42),
+        "SVM": SVC(kernel="rbf", probability=True, class_weight="balanced", random_state=42),
+    }
+    best_clf = model_registry[best_model_name]
 
     best_pipeline = SkPipeline(
         steps=[

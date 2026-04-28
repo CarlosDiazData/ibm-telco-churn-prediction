@@ -2,24 +2,28 @@
 import warnings
 
 import mlflow
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline as SkPipeline
+from sklearn.svm import SVC
 
 
 def train_and_log(
     X_train,
     y_train,
     preprocessor,
+    sample_weight=None,
     experiment_name: str = "churn-prediction",
 ) -> dict:
-    """Train Logistic Regression and Random Forest, log each run to MLflow.
+    """Train multiple classifiers and log each run to MLflow.
 
     Args:
         X_train: Training features DataFrame or array.
         y_train: Training target array or Series.
         preprocessor: Fitted ColumnTransformer preprocessor.
+        sample_weight: Optional array of weights for samples. If provided,
+            training is weighted. Defaults to None (unweighted).
         experiment_name: MLflow experiment name.
 
     Returns:
@@ -37,6 +41,8 @@ def train_and_log(
     models_config = [
         ("LogisticRegression", LogisticRegression(max_iter=1000, class_weight="balanced", random_state=42)),
         ("RandomForest", RandomForestClassifier(n_estimators=100, class_weight="balanced", random_state=42)),
+        ("GradientBoosting", GradientBoostingClassifier(n_estimators=100, random_state=42)),
+        ("SVM", SVC(kernel="rbf", probability=True, class_weight="balanced", random_state=42)),
     ]
 
     for model_name, model in models_config:
@@ -53,7 +59,10 @@ def train_and_log(
             )
 
             # Fit pipeline
-            pipeline.fit(X_train, y_train)
+            if sample_weight is not None:
+                pipeline.fit(X_train, y_train, classifier__sample_weight=sample_weight)
+            else:
+                pipeline.fit(X_train, y_train)
 
             # Log explicitly for clarity (autolog handles most of this)
             mlflow.sklearn.log_model(pipeline, f"model_{model_name}")
